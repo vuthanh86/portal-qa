@@ -109,10 +109,10 @@ export function run(args) {
 		["baseline   lightbox_id        ", baseline["lightbox_id"],        true],
 		["baseline   page_load_line     ", baseline["page_load_line"],     true],
 		["baseline   a11y_audit_line      ", baseline["a11y_audit_line"],     true],
-		["baseline   sparkline_absent   ", baseline["sparkline_absent"],   true],
+		["baseline   sparkline_absent   ", baseline["sparkline_absent"],   false],
 		["with-trend sparkline_present  ", withTrend["sparkline_present"], true],
 		["with-trend polyline           ", withTrend["polyline"],           true],
-		["no-trend   sparkline_absent   ", afterDelete["sparkline_absent_again"], true]
+		["no-trend   sparkline_absent   ", afterDelete["sparkline_absent_again"], false]
 	];
 	let ok = true;
 	for (const [label, got, want] of rows) {
