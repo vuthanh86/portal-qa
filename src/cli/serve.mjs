@@ -12,7 +12,7 @@ import { createServer } from "node:http";
 import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(here, "..", "..");
@@ -38,16 +38,29 @@ function send(res, status, body, contentType = "application/json") {
 	res.end(typeof body === "string" ? body : JSON.stringify(body, null, 2));
 }
 
+function runsRoot() {
+	return process.env.DSH_RUNS_DIR || join(process.env.HOME || process.env.USERPROFILE || ".", ".dsh", "runs");
+}
+
+function resolveRunDir(runDir) {
+	const root = resolve(runsRoot());
+	const resolved = resolve(root, runDir);
+	if (resolved !== root && !resolved.startsWith(root + sep)) return null;
+	return resolved;
+}
+
 function renderSummary(runDir) {
 	if (!runDir) return { ok: false, error: "missing runDir" };
-	const r = spawnSync(process.execPath, [rendererPath, runDir], { encoding: "utf8" });
+	const safeDir = resolveRunDir(runDir);
+	if (!safeDir) return { ok: false, error: "runDir must be inside DSH_RUNS_DIR" };
+	const r = spawnSync(process.execPath, [rendererPath, safeDir], { encoding: "utf8" });
 	if (r.status !== 0) return { ok: false, error: (r.stderr || r.stdout || "").trim() };
 	const last = (r.stdout || "").trim().split("\n").pop();
-	return { ok: true, runDir, summaryPath: join(runDir, "summary.html"), log: last };
+	return { ok: true, runDir: safeDir, summaryPath: join(safeDir, "summary.html"), log: last };
 }
 
 function listRunDirs() {
-	const root = process.env.DSH_RUNS_DIR || join(process.env.HOME || process.env.USERPROFILE || ".", ".dsh", "runs");
+	const root = runsRoot();
 	if (!existsSync(root)) return [];
 	try {
 		return readdirSync(root)
@@ -92,7 +105,8 @@ export function run(args) {
 				req.on("end", () => {
 					let payload = {};
 					try { payload = body ? JSON.parse(body) : {}; } catch { return send(res, 400, { ok: false, error: "invalid JSON body" }); }
-					return send(res, 200, renderSummary(payload.runDir));
+					const out = renderSummary(payload.runDir);
+					return send(res, out.ok ? 200 : 400, out);
 				});
 				return;
 			}

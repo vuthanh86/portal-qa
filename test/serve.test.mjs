@@ -12,11 +12,12 @@ const here = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(here, "..");
 const bin = join(packageRoot, "bin", "qa.mjs");
 
-async function startServer(extraArgs = []) {
+async function startServer(extraArgs = [], extraEnv = {}) {
 	const port = 40000 + Math.floor(Math.random() * 5000);
 	const child = spawn(process.execPath, [bin, "serve", "--port", String(port), "--host", "127.0.0.1"], {
 		stdio: ["ignore", "pipe", "pipe"],
-		cwd: packageRoot
+		cwd: packageRoot,
+		env: { ...process.env, ...extraEnv }
 	});
 	// Wait for the "qa serve: http://..." line on stdout.
 	await new Promise((resolve, reject) => {
@@ -43,7 +44,8 @@ test("GET /health returns { ok: true, version }", async (t) => {
 });
 
 test("POST /render with runDir returns totals and writes summary.html", async (t) => {
-	const s = await startServer();
+	// runDir must resolve inside DSH_RUNS_DIR now that /render rejects paths outside it.
+	const s = await startServer([], { DSH_RUNS_DIR: packageRoot });
 	t.after(() => s.stop());
 	const res = await fetch(`http://127.0.0.1:${s.port}/render`, {
 		method: "POST",
@@ -54,6 +56,19 @@ test("POST /render with runDir returns totals and writes summary.html", async (t
 	const body = await res.json();
 	assert.equal(body.ok, true);
 	assert.match(body.summaryPath, /summary\.html$/);
+});
+
+test("POST /render with runDir outside DSH_RUNS_DIR is rejected", async (t) => {
+	const s = await startServer([], { DSH_RUNS_DIR: join(packageRoot, "demo") });
+	t.after(() => s.stop());
+	const res = await fetch(`http://127.0.0.1:${s.port}/render`, {
+		method: "POST",
+		headers: { "content-type": "application/json" },
+		body: JSON.stringify({ runDir: packageRoot })
+	});
+	assert.equal(res.status, 400);
+	const body = await res.json();
+	assert.equal(body.ok, false);
 });
 
 test("GET /render with missing runDir returns 400", async (t) => {

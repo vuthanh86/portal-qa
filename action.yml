@@ -28,8 +28,11 @@ runs:
         node-version: ${{ inputs.node-version }}
     - id: run
       shell: bash
+      env:
+        QA_COMMAND: ${{ inputs.command }}
+        QA_RUN_DIR: ${{ inputs.run-dir }}
       run: |
-        node "$GITHUB_ACTION_PATH/bin/qa.mjs" "${{ inputs.command }}" "${{ inputs.run-dir }}"
-        if [ "${{ inputs.command }}" = "render" ]; then
-          echo "summary-path=${{ inputs.run-dir }}/summary.html" >> "$GITHUB_OUTPUT"
+        node "$GITHUB_ACTION_PATH/bin/qa.mjs" "$QA_COMMAND" "$QA_RUN_DIR"
+        if [ "$QA_COMMAND" = "render" ]; then
+          echo "summary-path=$QA_RUN_DIR/summary.html" >> "$GITHUB_OUTPUT"
         fi

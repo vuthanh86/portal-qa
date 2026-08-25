@@ -16,7 +16,7 @@ const bin = join(packageRoot, "bin", "qa.mjs");
 test("--version prints package version", () => {
 	const r = spawnSync(process.execPath, [bin, "--version"], { encoding: "utf8" });
 	assert.equal(r.status, 0);
-	assert.match(r.stdout.trim(), /^@vuthanh\/portal-qa v\d+\.\d+\.\d+$/);
+	assert.match(r.stdout.trim(), /^@vttech\/portal-qa v\d+\.\d+\.\d+$/);
 });
 
 test("--help lists subcommands", () => {
