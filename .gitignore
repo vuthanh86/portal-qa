@@ -1,0 +1,11 @@
+node_modules/
+*.log
+.npmrc
+coverage/
+dist/
+.DS_Store
+Thumbs.db
+# Don't accidentally commit a generated summary or temp trend.json inside the demo dir
+demo/summary.html
+demo/**/summary.html
+.trend.json

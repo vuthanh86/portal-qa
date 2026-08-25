@@ -1,0 +1,85 @@
+---
+# Azure DevOps custom task wrapper for @vttech/portal-qa.
+#
+# Reference in azure-pipelines.yml (after publishing to a feed or marketplace):
+#   - task: vuthanh.portal-qa.render@1
+#     inputs:
+#       runDir: $(Build.SourcesDirectory)/qa-run
+#       memoryDir: $(Pipeline.Workspace)/qa-memory
+#       command: verify
+#
+# Locally (sideload), drop this folder under an Azure DevOps extension project
+# and `tfx build` it. The task invokes the installed `qa` CLI from PATH.
+name: render
+friendlyName: portal-qa
+description: Runs the @vttech/portal-qa CLI to render or verify a QA run.
+helpMarkDown: |
+  Installs the @vttech/portal-qa CLI (Node >=18) and runs one of:
+    - render  → renders <runDir>/summary.html from results.json + evidence/
+    - verify  → self-tests the renderer (used by release pipelines)
+    - learn   → merges a run into the qa-memory store
+    - serve   → starts an HTTP server on the agent for in-pipeline inspection
+
+  The CLI is published to npm public, GitHub Packages, or any private registry.
+  Set `registry` if your agent cannot reach the public npm registry.
+
+author: vuthanh
+version: 0.1.0
+minimumAgentVersion: 2.144.0
+
+inputs:
+  command:
+    name: Command
+    type: string
+    default: render
+    required: true
+    helpMarkDown: One of: render, verify, learn, serve.
+    options:
+      - render
+      - verify
+      - learn
+      - serve
+  runDir:
+    name: Run directory
+    type: filePath
+    default: ""
+    helpMarkDown: Path to the QA run directory (must contain results.json).
+    required: false
+  memoryDir:
+    name: Memory directory
+    type: string
+    default: ""
+    helpMarkDown: Override DSH_MEMORY_DIR (defaults to ~/.dsh/qa-memory).
+    required: false
+  registry:
+    name: npm registry
+    type: string
+    default: https://registry.npmjs.org/
+    helpMarkDown: Registry to install the CLI from (npm public, GitHub Packages, or private).
+    required: false
+  cliVersion:
+    name: CLI version
+    type: string
+    default: latest
+    helpMarkDown: Version pin (e.g. 0.1.0) or `latest`.
+    required: false
+  port:
+    name: Serve port (only used by serve command)
+    type: string
+    default: "4173"
+    required: false
+
+outputs:
+  summaryPath:
+    name: Summary path
+    type: string
+    helpMarkDown: Path to the rendered summary.html (set when command=render).
+  totals:
+    name: Totals
+    type: string
+    helpMarkDown: Totals line printed by the CLI (set when command=render).
+
+execution:
+  Node16:
+    target: index.mjs
+    arguments: --command "$(command)" --runDir "$(runDir)" --memoryDir "$(memoryDir)" --port "$(port)"

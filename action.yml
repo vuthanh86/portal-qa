@@ -1,0 +1,35 @@
+name: 'portal-qa'
+description: 'Render a QA run (results.json → summary.html) or self-verify the plugin — zero external dependencies'
+branding:
+  icon: 'check-circle'
+  color: 'blue'
+inputs:
+  command:
+    description: 'qa subcommand to run: render | verify'
+    required: false
+    default: 'render'
+  run-dir:
+    description: 'QA run directory containing results.json (used by render)'
+    required: false
+    default: 'demo'
+  node-version:
+    description: 'Node.js version to use'
+    required: false
+    default: '20'
+outputs:
+  summary-path:
+    description: 'Path to the rendered summary.html (render only)'
+    value: ${{ steps.run.outputs.summary-path }}
+runs:
+  using: 'composite'
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+    - id: run
+      shell: bash
+      run: |
+        node "$GITHUB_ACTION_PATH/bin/qa.mjs" "${{ inputs.command }}" "${{ inputs.run-dir }}"
+        if [ "${{ inputs.command }}" = "render" ]; then
+          echo "summary-path=${{ inputs.run-dir }}/summary.html" >> "$GITHUB_OUTPUT"
+        fi

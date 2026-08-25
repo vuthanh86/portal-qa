@@ -1,0 +1,77 @@
+{
+  "runId": "qa-features-demo",
+  "scope": "Demo — flaky / regression / duration features",
+  "env": "demo (synthetic)",
+  "depth": "core",
+  "date": "2026-08-20",
+  "summary": { "total": 5, "passed": 2, "failed": 2, "skipped": 1, "durationMs": 227000 },
+  "cases": [
+    {
+      "id": "TC-A",
+      "title": "Happy path — loads fast",
+      "priority": "P0",
+      "status": "PASS",
+      "durationMs": 42000,
+      "pageLoadMs": 8500,
+      "flaky": false,
+      "regression": false,
+      "expected": "Page renders with data.",
+      "actual": "Rendered."
+    },
+    {
+      "id": "TC-B",
+      "title": "Flaky case — passed only on retry",
+      "priority": "P1",
+      "status": "PASS",
+      "durationMs": 30000,
+      "flaky": true,
+      "regression": false,
+      "expected": "Value X visible.",
+      "actual": "Failed on first attempt (timeout), passed on retry."
+    },
+    {
+      "id": "TC-C",
+      "title": "REGRESSION — previously passed, now broken",
+      "priority": "P0",
+      "status": "FAIL",
+      "durationMs": 95000,
+      "flaky": false,
+      "regression": true,
+      "expected": "Grid shows 12 rows.",
+      "actual": "Grid shows 0 rows; API 500 in console.",
+      "repro": ["1. Open screen", "2. Select period", "3. Grid empty"],
+      "evidence": ["evidence/TC-C-fail.png"],
+      "defectRef": "DEF-001"
+    },
+    {
+      "id": "TC-D",
+      "title": "New failure — not a regression",
+      "priority": "P2",
+      "status": "FAIL",
+      "durationMs": 60000,
+      "flaky": false,
+      "regression": false,
+      "a11yIssues": ["Button without accessible name"],
+      "expected": "Export downloads.",
+      "actual": "Export button no-op in Firefox.",
+      "repro": ["1. Open export dialog", "2. Click Export"],
+      "defectRef": "DEF-002"
+    },
+    {
+      "id": "TC-E",
+      "title": "Skipped — data prerequisite missing",
+      "priority": "P3",
+      "status": "SKIP",
+      "reason": "No test account with two divisions in this env.",
+      "durationMs": null,
+      "flaky": false,
+      "regression": false
+    }
+  ],
+  "defects": [
+    { "id": "DEF-001", "title": "Grid empty on period switch (regression)", "severity": "S1", "status": "open", "evidence": "evidence/TC-C-fail.png" },
+    { "id": "DEF-002", "title": "Export no-op in Firefox", "severity": "S2", "status": "open" }
+  ],
+  "recommendation": "NO-SHIP — S1 regression (TC-C) blocks; TC-D (S2) must be fixed or waived.",
+  "learnSummary": "memorized 1 regression, 1 flaky case, 2 defect updates"
+}

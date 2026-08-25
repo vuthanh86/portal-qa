@@ -1,0 +1,60 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+jobs:
+  verify-and-pack:
+    name: verify + pack + publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: ${{ matrix.registry || 'https://registry.npmjs.org/' }}
+
+      - name: Install
+        run: npm ci
+
+      - name: Self-test the renderer (qa verify)
+        run: npm test
+
+      - name: Assert pack contents
+        run: |
+          set -e
+          PACK=$(npm pack --dry-run 2>&1)
+          echo "$PACK"
+          echo "$PACK" | grep -q 'bin/qa.mjs'
+          echo "$PACK" | grep -q 'src/renderer/render-qa-summary.mjs'
+          echo "$PACK" | grep -q 'azdevops/task.yml'
+          echo "$PACK" | grep -q 'package.json'
+          echo "pack contents OK"
+
+      - name: Publish to npm
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish to GitHub Packages (mirror)
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          npm config set //npm.pkg.github.com/:_authToken "$GITHUB_TOKEN"
+          npm publish --registry=https://npm.pkg.github.com --provenance --access public
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Smoke-test the installed package
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          npx --yes @vttech/portal-qa@${{ github.ref_name }} verify

@@ -1,0 +1,51 @@
+{
+  "name": "@vttech/portal-qa",
+  "version": "0.1.0",
+  "description": "Lightweight, install-anywhere QA summary renderer, memory hooks, and HTTP server. Same renderer that powers ~/.dsh/, now publishable to npm, GitHub Packages, or any private registry.",
+  "type": "module",
+  "main": "src/cli/index.js",
+  "exports": {
+    ".": "./src/cli/index.js",
+    "./renderer": "./src/renderer/render-qa-summary.mjs",
+    "./memory/trend": "./src/memory/trend.mjs",
+    "./memory/learn": "./src/memory/learn.mjs"
+  },
+  "bin": {
+    "qa": "bin/qa.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "demo",
+    "azdevops",
+    "action.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "qa": "node bin/qa.mjs",
+    "render": "node bin/qa.mjs render",
+    "verify": "node bin/qa.mjs verify",
+    "serve": "node bin/qa.mjs serve",
+    "test": "node --test --test-concurrency=1 test/*.test.mjs"
+  },
+  "keywords": [
+    "qa",
+    "summary",
+    "report",
+    "playwright",
+    "dsh",
+    "portal-qa",
+    "azure-devops",
+    "ci"
+  ],
+  "license": "MIT",
+  "author": "vuthanh",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
+}
