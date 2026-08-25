@@ -1,6 +1,6 @@
 {
   "name": "@vttech/portal-qa",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Lightweight, install-anywhere QA summary renderer, memory hooks, and HTTP server. Same renderer that powers ~/.dsh/, now publishable to npm, GitHub Packages, or any private registry.",
   "type": "module",
   "main": "src/cli/index.js",
