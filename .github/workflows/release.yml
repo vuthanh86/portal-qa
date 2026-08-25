@@ -23,6 +23,9 @@ jobs:
           node-version: "20"
           registry-url: ${{ matrix.registry || 'https://registry.npmjs.org/' }}
 
+      - name: Update npm (Trusted Publishing requires npm >= 11.5.1)
+        run: npm install -g npm@latest
+
       - name: Install
         run: npm ci
 
