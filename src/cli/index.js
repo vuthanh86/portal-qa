@@ -37,7 +37,8 @@ export function render(runDir, opts = {}) {
 	return (r.stdout || "").trim();
 }
 
-export { readTrend, appendTrend } from "../memory/trend.mjs";
-export { mergeLearn, readLearn } from "../memory/learn.mjs";
+import { readTrend, appendTrend } from "../memory/trend.mjs";
+import { mergeLearn, readLearn } from "../memory/learn.mjs";
+export { readTrend, appendTrend, mergeLearn, readLearn };
 
 export default { render, readTrend, appendTrend, mergeLearn, readLearn, version, name, rendererPath };

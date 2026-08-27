@@ -8,7 +8,7 @@
  * and the <run-dir>/evidence/ folder, then writes <run-dir>/summary.html —
  * a self-contained page (inline CSS/JS, no external assets) with:
  *   • header + counts bar      (Total / OK / FAIL / SKIP / Flaky / a11y / Weak / Duration / pass-rate)
- *   • pass-rate trend sparkline (read from ~/.dsh/qa-memory/trend.json if present)
+ *   • pass-rate trend sparkline (read from $DSH_MEMORY_DIR/trend.json or ~/.dsh/qa-memory/trend.json)
  *   • status filters           (All / OK / FAIL / SKIP)
  *   • per-test rows grouped by priority (P0 → P3)
  *   • per-test rows with badges (OK/FAIL/SKIP, flaky, REGRESSION, healed, visual, a11y, weak/strong assert, slow) + expandable detail
@@ -26,12 +26,9 @@
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join, basename } from "node:path";
 import { homedir } from "node:os";
+import { pathToFileURL } from "node:url";
 
-const [, , runDir] = process.argv;
-if (!runDir) {
-	console.error("usage: node render-qa-summary.mjs <run-dir>");
-	process.exit(1);
-}
+export async function renderSummary(runDir) {
 
 const jsonPath = join(runDir, "results.json");
 let data;
@@ -165,7 +162,8 @@ const esc = (s) =>
 // ----- trend sparkline (optional) -----
 let trendPoints = [];
 try {
-	const trendRaw = await readFile(join(homedir(), ".dsh", "qa-memory", "trend.json"), "utf8");
+	const memDir = process.env.DSH_MEMORY_DIR || join(homedir(), ".dsh", "qa-memory");
+	const trendRaw = await readFile(join(memDir, "trend.json"), "utf8");
 	const parsed = JSON.parse(trendRaw);
 	if (Array.isArray(parsed.points)) {
 		trendPoints = parsed.points
@@ -640,3 +638,12 @@ const html = `<!DOCTYPE html>
 
 await writeFile(join(runDir, "summary.html"), html, "utf8");
 console.log(`wrote ${join(runDir, "summary.html")} — ${total} cases (${passed} OK, ${failed} FAIL, ${skipped} SKIP, ${flaky} flaky, ${regressions.length} regressions, ${weakCount} weak asserts, ${a11yCount} a11y findings, ${visualChanged} visual changes)`);
+return { runDir, summaryPath: join(runDir, "summary.html"), total, passed, failed, skipped, flaky, regressions: regressions.length, weakAsserts: weakCount, a11yFindings: a11yCount, visualChanges: visualChanged };
+}
+
+// Script entry: run only when invoked as `node render-qa-summary.mjs <run-dir>`
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+	const dir = process.argv[2];
+	if (!dir) { console.error("usage: node render-qa-summary.mjs <run-dir>"); process.exit(1); }
+	renderSummary(dir).catch((e) => { console.error(e?.stack || e); process.exit(1); });
+}

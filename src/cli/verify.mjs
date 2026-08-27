@@ -1,13 +1,19 @@
 /**
- * src/cli/verify.mjs — `qa verify [--dir <demo-dir>]` subcommand.
+ * src/cli/verify.mjs — `qa verify [--dir <demo-dir>] [--node-check]` subcommand.
  *
  * Self-test that the renderer produces every required marker.
  * Used by `npm test`, the release workflow, and the Azure DevOps wrapper.
  *
  * Default demo dir: <package>/demo (resolved relative to package.json).
+ *
+ * Isolation: every render runs against a fresh temporary memory directory
+ * (exported to the renderer as DSH_MEMORY_DIR). Verify never reads or writes
+ * `~/.dsh/qa-memory/`, so the user's real memory state cannot pollute the
+ * self-test and vice-versa.
  */
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, rmSync, existsSync, mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 
@@ -53,73 +59,71 @@ export function run(args) {
 		if (r.status !== 0) { process.stderr.write(r.stderr); return r.status || 1; }
 	}
 
-	// 1. Render without trend.json → sparkline must be absent.
-	if (existsSync(summaryPath)) rmSync(summaryPath);
-	render(opts.dir);
-	if (!existsSync(summaryPath)) throw new Error(`renderer did not write ${summaryPath}`);
-	let html = readFileSync(summaryPath, "utf8");
-
-	const baseline = grepAll(html, {
-		"P0</h2>":             "P0</h2>",
-		"a11y_chip":           "chip a11y",
-		"slow_chip":           "chip slow",
-		"Copy_defect":         "Copy defect",
-		"lightbox_id":         'id="lightbox"',
-		"page_load_line":      "Page load:",
-		"a11y_audit_line":     "a11y audit:",
-		"sparkline_absent":    '<svg width="120"'
-	});
-
-	// 2. With temp trend.json (3 points) → sparkline present.
-	//    The renderer reads <homedir>/.dsh/qa-memory/trend.json — write there
-	//    and clean up so we don't pollute real memory.
-	const home = process.env.HOME || process.env.USERPROFILE || ".";
-	const mem = join(home, ".dsh", "qa-memory");
-	const trendPath = join(mem, "trend.json");
-	const hadTrend = existsSync(trendPath);
-	const backup = hadTrend ? readFileSync(trendPath, "utf8") : null;
-	mkdirSync(mem, { recursive: true });
-	writeFileSync(trendPath, JSON.stringify({
-		points: [
-			{ date: "2026-08-18", passRate: 70 },
-			{ date: "2026-08-19", passRate: 83 },
-			{ date: "2026-08-20", passRate: 60 }
-		]
-	}));
+	// Use a temp memory dir so verify never touches ~/.dsh/qa-memory/.
+	// The renderer reads trend.json from process.env.DSH_MEMORY_DIR when set,
+	// falling back to the user's home dir otherwise.
+	const tempMemDir = mkdtempSync(join(tmpdir(), "qa-verify-mem-"));
+	process.env.DSH_MEMORY_DIR = tempMemDir;
 	try {
+		// 1. Baseline render — tempMemDir is empty, so no trend.json, so no sparkline.
+		if (existsSync(summaryPath)) rmSync(summaryPath);
 		render(opts.dir);
+		if (!existsSync(summaryPath)) throw new Error(`renderer did not write ${summaryPath}`);
+		let html = readFileSync(summaryPath, "utf8");
+
+		const baseline = grepAll(html, {
+			"P0</h2>":             "P0</h2>",
+			"a11y_chip":           "chip a11y",
+			"slow_chip":           "chip slow",
+			"Copy_defect":         "Copy defect",
+			"lightbox_id":         'id="lightbox"',
+			"page_load_line":      "Page load:",
+			"a11y_audit_line":     "a11y audit:",
+			"sparkline_absent":    '<svg width="120"'
+		});
+
+		// 2. With-trend: write trend.json INTO tempMemDir → sparkline present.
+		const trendPath = join(tempMemDir, "trend.json");
+		writeFileSync(trendPath, JSON.stringify({
+			points: [
+				{ date: "2026-08-18", passRate: 70 },
+				{ date: "2026-08-19", passRate: 83 },
+				{ date: "2026-08-20", passRate: 60 }
+			]
+		}));
+		render(opts.dir);
+		html = readFileSync(summaryPath, "utf8");
+		const withTrend = grepAll(html, { "sparkline_present": '<svg width="120"', "polyline": "<polyline" });
+
+		// 3. After-delete: remove trend.json from tempMemDir → sparkline gone.
+		rmSync(trendPath, { force: true });
+		render(opts.dir);
+		html = readFileSync(summaryPath, "utf8");
+		const afterDelete = grepAll(html, { "sparkline_absent_again": '<svg width="120"' });
+
+		// Report
+		const rows = [
+			["baseline   P0</h2>           ", baseline["P0</h2>"],               true],
+			["baseline   a11y_chip          ", baseline["a11y_chip"],          true],
+			["baseline   slow_chip          ", baseline["slow_chip"],          true],
+			["baseline   Copy_defect        ", baseline["Copy_defect"],        true],
+			["baseline   lightbox_id        ", baseline["lightbox_id"],        true],
+			["baseline   page_load_line     ", baseline["page_load_line"],     true],
+			["baseline   a11y_audit_line    ", baseline["a11y_audit_line"],     true],
+			["baseline   sparkline_absent   ", baseline["sparkline_absent"],   false],
+			["with-trend sparkline_present  ", withTrend["sparkline_present"], true],
+			["with-trend polyline           ", withTrend["polyline"],           true],
+			["no-trend   sparkline_absent   ", afterDelete["sparkline_absent_again"], false]
+		];
+		let ok = true;
+		for (const [label, got, want] of rows) {
+			const pass = got === want;
+			if (!pass) ok = false;
+			process.stdout.write(`${pass ? "PASS" : "FAIL"}  ${label} = ${got}\n`);
+		}
+		process.stdout.write(ok ? "\nqa verify: all checks passed\n" : "\nqa verify: FAILED\n");
+		return ok ? 0 : 1;
 	} finally {
-		if (hadTrend) writeFileSync(trendPath, backup, "utf8");
-		else rmSync(trendPath, { force: true });
+		rmSync(tempMemDir, { recursive: true, force: true });
 	}
-	html = readFileSync(summaryPath, "utf8");
-	const withTrend = grepAll(html, { "sparkline_present": '<svg width="120"', "polyline": "<polyline" });
-
-	// 3. Re-render with no trend.json → sparkline gone again.
-	render(opts.dir);
-	html = readFileSync(summaryPath, "utf8");
-	const afterDelete = grepAll(html, { "sparkline_absent_again": '<svg width="120"' });
-
-	// Report
-	const rows = [
-		["baseline   P0</h2>           ", baseline["P0</h2>"],           true],
-		["baseline   a11y_chip          ", baseline["a11y_chip"],          true],
-		["baseline   slow_chip          ", baseline["slow_chip"],          true],
-		["baseline   Copy_defect        ", baseline["Copy_defect"],        true],
-		["baseline   lightbox_id        ", baseline["lightbox_id"],        true],
-		["baseline   page_load_line     ", baseline["page_load_line"],     true],
-		["baseline   a11y_audit_line      ", baseline["a11y_audit_line"],     true],
-		["baseline   sparkline_absent   ", baseline["sparkline_absent"],   false],
-		["with-trend sparkline_present  ", withTrend["sparkline_present"], true],
-		["with-trend polyline           ", withTrend["polyline"],           true],
-		["no-trend   sparkline_absent   ", afterDelete["sparkline_absent_again"], false]
-	];
-	let ok = true;
-	for (const [label, got, want] of rows) {
-		const pass = got === want;
-		if (!pass) ok = false;
-		process.stdout.write(`${pass ? "PASS" : "FAIL"}  ${label} = ${got}\n`);
-	}
-	process.stdout.write(ok ? "\nqa verify: all checks passed\n" : "\nqa verify: FAILED\n");
-	return ok ? 0 : 1;
 }
